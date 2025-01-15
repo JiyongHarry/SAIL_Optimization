@@ -1,4 +1,3 @@
-#new one more time
 #Pyomo Example 2.1 "Production Models ith linear constraints"
 
 import matplotlib.pyplot as plt
@@ -10,7 +9,7 @@ import os.path
 
 #check wheter the pyomo and cbc are installed
 assert(shutil.which("pyomo"))
-assert(shutil.which("cbc"))
+assert(shutil.which("gurobi"))
 
 from pyomo.environ import * #imports all the functionality from the pyomo.environ module to the script ('*' means all)
 
@@ -33,7 +32,7 @@ model.laborA = Constraint(expr = model.x <= 80)
 model.laborB = Constraint(expr = 2*model.x <= 100)
 
 #Solve the problem
-SolverFactory('cbc').solve(model).write() #inside the salverfactory, different solver can be used such as 'cbc', 'gurobi', 'ipopt'
+SolverFactory('gurobi').solve(model).write() #inside the salverfactory, different solver can be used such as 'cbc', 'gurobi', 'ipopt'
 
 #Display the results
 model.profit.display()
