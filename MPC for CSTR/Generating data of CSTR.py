@@ -3,6 +3,7 @@ from pyomo.dae import *
 import math
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 
 
 def get_model_variable_volume(xss={}, uss={}, ucon={}, xinit=0.3, uinit=200):
@@ -66,52 +67,90 @@ def get_model_variable_volume(xss={}, uss={}, ucon={}, xinit=0.3, uinit=200):
 import deepxde as dde
 import random
 
-# generate a random production target
+# Initialize lists to store the results
+all_data = []
 
-space = dde.data.GRF(
-    T=10, kernel="RBF", length_scale=2
-)  # creat Gaussian random field with time horizon of 10 and RBF kernel, lenght scale of 2
-feats = -space.random(1)
-xs = np.linspace(0, 10, num=51)[:, None]  # - time. make column vector of (51,1)
-y = 0.5 + 0.1 * space.eval_batch(
-    feats, xs
-)  # - production target ## Q: WHY SCALE AND SHIFT?
-xss = {}
-for j in range(len(xs)):
-    xss[xs[j][0]] = y[0][j]
-uss = {}
-x0_ = 0.2  # np.random.uniform(0,1,1)[0]
-u0 = 250  # np.random.uniform(200,1500,1)[0]
-ucon = 100
-m, p = get_model_variable_volume(xss, uss, ucon, x0_, u0)
-# Q: WHY DO WE USE USS, UCO, X0, U0 IF THEY ARE NOT USED?
+# Generate 100 cases
+for case_num in range(100):
+    # Generate a random production target
+    space = dde.data.GRF(
+        T=10, kernel="RBF", length_scale=2
+    )  # creat Gaussian random field with time horizon of 10 and RBF kernel, lenght scale of 2
+    feats = -space.random(1)
+    xs = np.linspace(0, 10, num=51)[:, None]  # - time. make column vector of (51,1)
+    y = 0.5 + 0.1 * space.eval_batch(
+        feats, xs
+    )  # - production target ## Q: WHY SCALE AND SHIFT?
+    xss = {}
+    for j in range(len(xs)):
+        xss[xs[j][0]] = y[0][j]
+    uss = {}
+    x0_ = 0.2  # np.random.uniform(0,1,1)[0]
+    u0 = 250  # np.random.uniform(200,1500,1)[0]
+    ucon = 100
+    m, p = get_model_variable_volume(
+        xss, uss, ucon, x0_, u0
+    )  # Q: WHY DO WE USE USS, UCO, X0, U0 IF THEY ARE NOT USED?
 
-m.pprint()
+    solver = SolverFactory("ipopt")
+    res = solver.solve(m, tee=False)
 
-plt.title("Production target")
-plt.plot([t for t in m.t], p.values())
-plt.xlabel("Time")
-plt.ylabel("Concentration")
+    # Store the results
+    t_ = [t for t in m.t]
+    uin_sol = [m.u[t]() for t in m.t]
+    p_sol = [p[t] for t in m.t]
 
-solver = SolverFactory(
-    "ipopt"
-)  # Q: HOW DOES THE MODEL KNOW WHICH ARE DECITION VARIABLES AND WHICH ARE PARAMETERS?
-res = solver.solve(m, tee=True)
-# store the results
-t_ = [t for t in m.t]
-uin_sol = [m.u[t]() for t in m.t]
-c_sol = [m.c[t]() for t in m.t]
+    for t, p_val, u_val in zip(t_, p_sol, uin_sol):
+        all_data.append([case_num, t, p_val, u_val])
 
-# Get the type and contents of p
-print("Type of p:", type(p))
-print("Contents of p:", p)
+# Convert list to DataFrame
+df = pd.DataFrame(
+    all_data, columns=["case", "time", "production_target", "inlet_flow_rate"]
+)
 
-# Get the type and contents of uin_sol
-print("Type of uin_sol:", type(uin_sol))
-print("Contents of uin_sol:", uin_sol)
+# Save to CSV
+df.to_csv(
+    "/Users/jiyong/Git/SAIL_Optimization/MPC for CSTR/generated_data_CSTR.csv",
+    index=False,
+)
 
-plt.plot(t_, uin_sol)
-plt.title("Inlet Flow Rate Over Time")
+# Plot production target over time for all cases
+plt.figure(figsize=(10, 6))
+for case_num in range(100):
+    case_data = df[df["case"] == case_num]
+    plt.plot(
+        case_data["time"], case_data["production_target"], label=f"Case {case_num}"
+    )
+
+plt.title("Production Target Over Time for All Cases")
+plt.xlabel("Time (s)")
+plt.ylabel("Production Target (Concentration)")
+plt.legend(loc="upper right", bbox_to_anchor=(1.15, 1))
+plt.show()
+
+# Plot inlet flow rate over time for all cases
+plt.figure(figsize=(10, 6))
+for case_num in range(100):
+    case_data = df[df["case"] == case_num]
+    plt.plot(case_data["time"], case_data["inlet_flow_rate"], label=f"Case {case_num}")
+
+plt.title("Inlet Flow Rate Over Time for All Cases")
 plt.xlabel("Time (s)")
 plt.ylabel("Inlet Flow Rate (m^3/s)")
+plt.legend(loc="upper right", bbox_to_anchor=(1.15, 1))
 plt.show()
+
+# # First figure: Production Target
+# fig1 = plt.figure()  # Explicitly create a new figure
+# plt.plot([t for t in m.t], p.values())
+# plt.title("Production Target")
+# plt.xlabel("Time")
+# plt.ylabel("Concentration")
+
+# # Second figure: Inlet Flow Rate
+# fig2 = plt.figure()  # Explicitly create another new figure
+# plt.plot(t_, uin_sol)
+# plt.title("Inlet Flow Rate Over Time")
+# plt.xlabel("Time (s)")
+# plt.ylabel("Inlet Flow Rate (m^3/s)")
+# plt.show()
