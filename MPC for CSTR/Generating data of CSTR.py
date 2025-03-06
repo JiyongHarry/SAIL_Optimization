@@ -4,6 +4,10 @@ import math
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from pyomo.opt import SolverStatus, TerminationCondition
+
+# Define a global parameter for the number of points
+NUM_POINTS = 100
 
 
 def get_model_variable_volume(xss={}, uss={}, ucon={}, xinit=0.3, uinit=200):
@@ -25,11 +29,12 @@ def get_model_variable_volume(xss={}, uss={}, ucon={}, xinit=0.3, uinit=200):
         m.t,
         rule=lambda m, t: m.dc[t] == (1 - m.c[t]) * m.u[t] / m.V - m.k * m.c[t] ** 3,
     )
-    ## Q: WHAT IS THE RULE OF LAMDA?
+    ## Q: WHAT IS THE RULE OF LAMDA? / A: when it comes to the set, need to call lamda m for model, and the set
 
     # discretize differential equations
     discretizer = TransformationFactory("dae.finite_difference")
-    discretizer.apply_to(m, nfe=50, wrt=m.t, scheme="BACKWARD")
+    discretizer.apply_to(m, nfe=NUM_POINTS, wrt=m.t, scheme="BACKWARD")
+    # m.ode.pprint()
 
     # m.c[0].fix(xinit)
     # m.u[0].fix(uinit)
@@ -39,6 +44,7 @@ def get_model_variable_volume(xss={}, uss={}, ucon={}, xinit=0.3, uinit=200):
     m.der_l = Constraint(m.t, rule=lambda m, t: m.du[t] >= -20)
 
     ## Q: HOW AND WHAT'S THE PURPOSE OF THE FOLLOWING LINES?
+    # the following code is for the mismatch between the model time line and the prduction target time line.
     p = {}
     time_ = [t for t in m.t]
     for t in m.t:
@@ -59,7 +65,7 @@ def get_model_variable_volume(xss={}, uss={}, ucon={}, xinit=0.3, uinit=200):
     def _obj(m):
         return m.intX
 
-    m.obj = Objective(rule=_obj)  # Q: WHAT DOES RULE=_0BJ MEAN?
+    m.obj = Objective(rule=_obj)
     # m.obj = Objective(expr = sum( (m.c[t] - xss[math.ceil(t)])**2 for t in m.t), sense=minimize)
     return m, p
 
@@ -71,16 +77,19 @@ import random
 all_data = []
 
 # Generate 100 cases
-for case_num in range(100):
+for case_num in range(10):  # generate cases
     # Generate a random production target
     space = dde.data.GRF(
         T=10, kernel="RBF", length_scale=2
     )  # creat Gaussian random field with time horizon of 10 and RBF kernel, lenght scale of 2
     feats = -space.random(1)
-    xs = np.linspace(0, 10, num=51)[:, None]  # - time. make column vector of (51,1)
+    xs = np.linspace(0, 10, num=NUM_POINTS + 1)[
+        :, None
+    ]  # - time. make column vector of (NUM_POINTS + 1, 1)
+
     y = 0.5 + 0.1 * space.eval_batch(
         feats, xs
-    )  # - production target ## Q: WHY SCALE AND SHIFT?
+    )  # - production target ## Q: WHY SCALE AND SHIFT? // A: TO MAKE C to locate from 0 to 1
     xss = {}
     for j in range(len(xs)):
         xss[xs[j][0]] = y[0][j]
@@ -93,7 +102,19 @@ for case_num in range(100):
     )  # Q: WHY DO WE USE USS, UCO, X0, U0 IF THEY ARE NOT USED?
 
     solver = SolverFactory("ipopt")
-    res = solver.solve(m, tee=False)
+    results = solver.solve(m, tee=False)
+    # print(results)
+
+    # checking status of the problem differentiate each of the results in optimal, infeasible
+
+    if (results.solver.status == SolverStatus.ok) and (
+        results.solver.termination_condition == TerminationCondition.optimal
+    ):
+        print("Solver Status:", results.solver.status)
+    elif results.solver.termination_condition == TerminationCondition.infeasible:
+        print("Solver Status:", results.solver.status)
+    else:
+        print("Solver Status:", results.solver.status)
 
     # Store the results
     t_ = [t for t in m.t]
