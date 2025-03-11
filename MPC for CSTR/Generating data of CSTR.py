@@ -5,9 +5,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from pyomo.opt import SolverStatus, TerminationCondition
+import time
 
 # Define a global parameter for the number of points
-NUM_POINTS = 100
+NUM_POINTS = 100  # Descretization of the time horizon
+TotalCase = 1000  # Number of cases
+
+# Record the start time
+start_time = time.time()
 
 
 def get_model_variable_volume(xss={}, uss={}, ucon={}, xinit=0.3, uinit=200):
@@ -77,7 +82,9 @@ import random
 all_data = []
 
 # Generate 100 cases
-for case_num in range(10):  # generate cases
+
+for case_num in range(TotalCase):  # generate cases
+    print(f"case_num: {case_num}")
     # Generate a random production target
     space = dde.data.GRF(
         T=10, kernel="RBF", length_scale=2
@@ -113,8 +120,12 @@ for case_num in range(10):  # generate cases
         print("Solver Status:", results.solver.status)
     elif results.solver.termination_condition == TerminationCondition.infeasible:
         print("Solver Status:", results.solver.status)
+        print("!!!Exception detected!!!")
+        break
     else:
         print("Solver Status:", results.solver.status)
+        print("!!!Exception detected!!!")
+        break
 
     # Store the results
     t_ = [t for t in m.t]
@@ -131,9 +142,16 @@ df = pd.DataFrame(
 
 # Save to CSV
 df.to_csv(
-    "/Users/jiyong/Git/SAIL_Optimization/MPC for CSTR/generated_data_CSTR.csv",
+    f"/Users/jiyong/Git/SAIL_Optimization/MPC for CSTR/generated_{TotalCase}_data_CSTR.csv",
     index=False,
 )
+
+# Record the end time
+end_time = time.time()
+
+# Calculate and print the elapsed time
+elapsed_time = end_time - start_time
+print(f"Elapsed time: {elapsed_time:.2f} seconds")
 
 # Plot production target over time for all cases
 plt.figure(figsize=(10, 6))

@@ -18,7 +18,7 @@ X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
 
 mlp = MLPRegressor(
-    hidden_layer_sizes=(100, 50),  # Two hidden layers: 100 and 50 neurons
+    hidden_layer_sizes=(50, 50),  # Two hidden layers: 100 and 50 neurons
     activation="relu",  # Activation function: 'relu' (others: 'tanh', 'logistic')
     solver="adam",  # Optimizer: 'adam' (others: 'sgd', 'lbfgs')
     alpha=0.01,  # L2 regularization term (higher = stronger regularization)
