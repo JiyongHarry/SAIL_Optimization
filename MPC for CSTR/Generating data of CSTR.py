@@ -8,8 +8,8 @@ from pyomo.opt import SolverStatus, TerminationCondition
 import time
 
 # Define a global parameter for the number of points
-NUM_POINTS = 100  # Descretization of the time horizon
-TotalCase = 1000  # Number of cases
+NUM_POINTS = 50  # Descretization of the time horizon
+TotalCase = 1  # Number of cases
 
 # Record the start time
 start_time = time.time()
@@ -78,10 +78,9 @@ def get_model_variable_volume(xss={}, uss={}, ucon={}, xinit=0.3, uinit=200):
 import deepxde as dde
 import random
 
-# Initialize lists to store the results
-all_data = []
-
-# Generate 100 cases
+# Initialize 2D arrays to store p and m.u
+p_val_array = np.empty((TotalCase, NUM_POINTS + 1))
+u_val_array = np.empty((TotalCase, NUM_POINTS + 1))
 
 for case_num in range(TotalCase):  # generate cases
     print(f"case_num: {case_num}")
@@ -132,64 +131,31 @@ for case_num in range(TotalCase):  # generate cases
     uin_sol = [m.u[t]() for t in m.t]
     p_sol = [p[t] for t in m.t]
 
-    for t, p_val, u_val in zip(t_, p_sol, uin_sol):
-        all_data.append([case_num, t, p_val, u_val])
-
-# Convert list to DataFrame
-df = pd.DataFrame(
-    all_data, columns=["case", "time", "production_target", "inlet_flow_rate"]
-)
-
-# Save to CSV
-df.to_csv(
-    f"/Users/jiyong/Git/SAIL_Optimization/MPC for CSTR/generated_{TotalCase}_data_CSTR.csv",
-    index=False,
-)
+    for j, (p_val, u_val) in enumerate(zip(p_sol, uin_sol)):
+        p_val_array[case_num, j] = p_val
+        u_val_array[case_num, j] = u_val
 
 # Record the end time
 end_time = time.time()
-
 # Calculate and print the elapsed time
 elapsed_time = end_time - start_time
 print(f"Elapsed time: {elapsed_time:.2f} seconds")
+print(f"p_val_array: {p_val_array}")
+print(f"u_val_array: {u_val_array}")
 
-# Plot production target over time for all cases
-plt.figure(figsize=(10, 6))
-for case_num in range(100):
-    case_data = df[df["case"] == case_num]
-    plt.plot(
-        case_data["time"], case_data["production_target"], label=f"Case {case_num}"
-    )
+# Save 2D arrays to separate sheets in an Excel file
+with pd.ExcelWriter(
+    f"/Users/jiyong/Git/SAIL_Optimization/MPC for CSTR/generated_{TotalCase}_data_CSTR.xlsx"
+) as writer:
+    pd.DataFrame(p_val_array).to_excel(writer, sheet_name="p_val", index=False)
+    pd.DataFrame(u_val_array).to_excel(writer, sheet_name="u_val", index=False)
 
-plt.title("Production Target Over Time for All Cases")
-plt.xlabel("Time (s)")
-plt.ylabel("Production Target (Concentration)")
-plt.legend(loc="upper right", bbox_to_anchor=(1.15, 1))
-plt.show()
 
-# Plot inlet flow rate over time for all cases
-plt.figure(figsize=(10, 6))
-for case_num in range(100):
-    case_data = df[df["case"] == case_num]
-    plt.plot(case_data["time"], case_data["inlet_flow_rate"], label=f"Case {case_num}")
-
-plt.title("Inlet Flow Rate Over Time for All Cases")
-plt.xlabel("Time (s)")
-plt.ylabel("Inlet Flow Rate (m^3/s)")
-plt.legend(loc="upper right", bbox_to_anchor=(1.15, 1))
-plt.show()
-
-# # First figure: Production Target
-# fig1 = plt.figure()  # Explicitly create a new figure
-# plt.plot([t for t in m.t], p.values())
-# plt.title("Production Target")
-# plt.xlabel("Time")
-# plt.ylabel("Concentration")
-
-# # Second figure: Inlet Flow Rate
-# fig2 = plt.figure()  # Explicitly create another new figure
-# plt.plot(t_, uin_sol)
-# plt.title("Inlet Flow Rate Over Time")
-# plt.xlabel("Time (s)")
-# plt.ylabel("Inlet Flow Rate (m^3/s)")
-# plt.show()
+# Function to read p_val and u_val from the Excel file
+def read_data(file_path):
+    with pd.ExcelFile(file_path) as reader:
+        p_val_df = pd.read_excel(reader, sheet_name="p_val")
+        u_val_df = pd.read_excel(reader, sheet_name="u_val")
+    p_val_array = p_val_df.to_numpy()
+    u_val_array = u_val_df.to_numpy()
+    return p_val_array, u_val_array
