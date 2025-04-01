@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import deepxde as dde
 
-# #Define a global parameter for the number of points
+# Define a global parameter for the number of points
 NUM_POINTS = 50  # Descretization of the time horizon
 
 
