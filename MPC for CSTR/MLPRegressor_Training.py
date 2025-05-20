@@ -19,10 +19,10 @@ def read_data(file_path):
     print("Data from u_val sheet:")
     print(df_u)  # Print all rows
     p_val_array = df_p.values
-    # u_val_array = df_u.values
+    # u_val_array = df_u.values # (for entire time horizon)
     u_val_array = df_u.iloc[:, 0].values.reshape(
         -1, 1
-    )  # Read each row but only the first column
+    )  # (for first point control problem) Read each row but only the first column
     return p_val_array, u_val_array
 
 
@@ -30,7 +30,7 @@ def read_data(file_path):
 start_time = time.time()
 
 # Load the dataset
-TotalCase = 100000
+TotalCase = 10000  # define the number of cases here
 file_path = f"/Users/jiyong/Git/SAIL_Optimization/MPC for CSTR/generated_{TotalCase}_data_CSTR.xlsx"
 p_val_array, u_val_array = read_data(file_path)
 
@@ -70,7 +70,7 @@ end_time = time.time()
 
 # Save the trained model
 model_path = f"/Users/jiyong/Git/SAIL_Optimization/MPC for CSTR/MLPRegressor_model_{TotalCase}_case.pkl"
-joblib.dump(mlp, model_path)
+joblib.dump(mlp, model_path)  # load generated data
 
 # Make predictions
 y_pred = mlp.predict(X_test)
@@ -115,7 +115,7 @@ plot_path = f"/Users/jiyong/Library/CloudStorage/Box-Box/SAIL_Research_JiyongLee
 plt.savefig(plot_path)
 plt.show()
 
-# # Single Case Prediction
+# # Single Case Prediction (This is for comparing train result w.r.t. completely new single test data)
 
 # X_single = np.array(
 #     [

@@ -194,24 +194,32 @@ N_data_test = 100
 Nt = 11
 import random
 
-space = dde.data.GRF(T=10, kernel="RBF", length_scale=2)
-feats = -space.random(1)
-xs = np.linspace(0, 10, num=11)[:, None]
-y = 0.5 + 0.1 * space.eval_batch(feats, xs)
-xss = {}
-for j in range(len(xs)):
-    xss[xs[j][0]] = y[0][j]
-uss = {}
-x0_ = 0.5  # np.random.uniform(0,1,1)[0]
-u0 = 200  # np.random.uniform(200,300,1)[0]
-du_ = np.random.uniform(10, 100, 1)[0]
-ucon = 100
-m, p = get_model2(xss, uss, ucon, x0_, u0, du_)
-# m.del_component(m.du[0])
-res = solver.solve(m, tee=False)
+TotalCase = 5
 
-B, Bc, Bn = make_graphs(m, xss, du_, plot=True)
+for case_num in range(TotalCase):
+    space = dde.data.GRF(T=10, kernel="RBF", length_scale=2)
+    feats = -space.random(1)
+    xs = np.linspace(0, 10, num=11)[:, None]
+    y = 0.5 + 0.1 * space.eval_batch(feats, xs)
+    xss = {}
+    for j in range(len(xs)):
+        xss[xs[j][0]] = y[0][j]
+    uss = {}
+    x0_ = 0.5  # np.random.uniform(0,1,1)[0]
+    u0 = 200  # np.random.uniform(200,300,1)[0]
+    du_ = np.random.uniform(10, 100, 1)[0]
+    ucon = 100
+    m, p = get_model2(xss, uss, ucon, x0_, u0, du_)
+    # m.del_component(m.du[0])
+    res = solver.solve(m, tee=False)
 
-label = m.obj()
-data = get_datapoint(Bn, label)
-print(data)
+    B, Bc, Bn = make_graphs(m, xss, du_, plot=True)
+
+    label = m.obj()
+    data = get_datapoint(Bn, label)
+    print(data)
+
+    for node, attributes in B.nodes(data=True):
+        # Check if the 'pr' attribute exists for the node
+        if "pr" in attributes:
+            print(f"Node: {node}, pr: {attributes['ub']}")
