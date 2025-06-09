@@ -8,6 +8,15 @@ import sys
 import os
 
 
+import random
+from pyomo.environ import *
+import networkx as nx
+from networkx.algorithms import bipartite
+
+import torch
+from torch_geometric.utils import from_networkx
+
+
 def get_dynamic_model(c0, u0, y, du_):
     m = ConcreteModel()
     T = np.arange(10)
@@ -37,18 +46,6 @@ def get_dynamic_model(c0, u0, y, du_):
 
     m.obj = Objective(expr=10 * sum((m.c[t] - y[0][t]) ** 2 for t in T), sense=minimize)
     return m, T
-
-
-solver = SolverFactory("ipopt")  # >>> Q: Any Diff?
-# solver = SolverFactory('gams')
-# solver.options['solver'] = 'conopt'
-
-import random
-from pyomo.environ import *
-import networkx as nx
-from networkx.algorithms import bipartite
-
-import matplotlib.pyplot as plt
 
 
 def make_graphs(m, xss, du_):
@@ -120,10 +117,6 @@ def make_graphs(m, xss, du_):
     return B, Bc, Bn
 
 
-import torch
-from torch_geometric.utils import from_networkx
-
-
 def get_datapoint(Bn, label):
     # Convert NetworkX graph to PyTorch Geometric Data
     data = from_networkx(Bn, group_node_attrs=["lb", "ub", "der_lb", "der_ub", "pr"])
@@ -133,15 +126,13 @@ def get_datapoint(Bn, label):
     return data
 
 
-# solver = SolverFactory('ipopt')
-solver = SolverFactory("gams")
+solver = SolverFactory("ipopt")
+# solver = SolverFactory("gams")
 solver.options["solver"] = "conopt"
 
 data_list = []
 
-import random
-
-N_data = 1  # you must define this
+N_data = 10  # you must define this
 for i in range(N_data):
     space = dde.data.GRF(T=5, kernel="RBF", length_scale=0.5)
     feats = -space.random(1)
