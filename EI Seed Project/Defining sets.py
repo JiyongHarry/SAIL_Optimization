@@ -12,7 +12,9 @@ model = ConcreteModel()
 
 # --- Sets ---
 model.N = Set(initialize=df_bus["Bus Number"].unique())  # Set of buses
-model.G = Set(initialize=df_gen["Gen Number"].unique())  # Set of generators
+model.G = Set(
+    initialize=df_gen["Gen Number"].unique()
+)  # Set of generators (Genetartor#)
 model.L = Set(initialize=df_line["line_num"].unique())  # Set of lines
 model.D = Set(initialize=range(1, 366))  # Set of days
 model.H = Set(initialize=range(1, 25))  # Set of hours
@@ -34,7 +36,7 @@ model.M = Set(
 )  # Regional sets of chemical manufacturing load zone (TBD)
 
 # --- Parameters ---
-# ---- Read from CSV and create dictionaries ----
+# ---- Read from TEXAS 123-BT params.csv files in the working direct. ----
 # ----- Bus Parameters ----
 
 bus_name_dict = {row["Bus Number"]: row["Bus Name"] for _, row in df_bus.iterrows()}
@@ -93,7 +95,6 @@ model.gen_c0 = Param(model.G, initialize=gen_c0_dict)
 model.gen_c1 = Param(model.G, initialize=gen_c1_dict)
 model.gen_cSu = Param(model.G, initialize=gen_cSu_dict)
 model.gen_rampingRate = Param(model.G, initialize=gen_rampingRate_dict)
-
 
 # ----- Line Parameters ----
 line_fromBusNumber_dict = {
