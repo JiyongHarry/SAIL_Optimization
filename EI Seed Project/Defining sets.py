@@ -83,7 +83,7 @@ gen_rampingRate_dict = {
     row["Gen Number"]: row["Ramping Rate(MW/min)"] for _, row in df_gen.iterrows()
 }
 
-model.gen_toBusNumber = Param(model.G, initialize=gen_toBusNumber_dict, within=Any)
+model.gen_toBusNumber = Param(model.G, initialize=gen_toBusNumber_dict)
 model.gen_pMax = Param(model.G, initialize=gen_pMax_dict)
 model.gen_pMin = Param(model.G, initialize=gen_pMin_dict)
 model.gen_qMax = Param(model.G, initialize=gen_qMax_dict)
@@ -95,12 +95,55 @@ model.gen_cSu = Param(model.G, initialize=gen_cSu_dict)
 model.gen_rampingRate = Param(model.G, initialize=gen_rampingRate_dict)
 
 
-# --- Verification Prints ---
+# ----- Line Parameters ----
+line_fromBusNumber_dict = {
+    row["line_num"]: row["From Bus Number"] for _, row in df_line.iterrows()
+}
+line_toBusNumber_dict = {
+    row["line_num"]: row["To Bus Number"] for _, row in df_line.iterrows()
+}
+line_r_dict = {row["line_num"]: row["R, pu"] for _, row in df_line.iterrows()}
+line_x_dict = {row["line_num"]: row["X, pu"] for _, row in df_line.iterrows()}
+line_b_dict = {row["line_num"]: row["B, pu"] for _, row in df_line.iterrows()}
+line_capactiy_dict = {
+    row["line_num"]: row["Capacity (MW)"] for _, row in df_line.iterrows()
+}
+line_fromBusLatitude_dict = {
+    row["line_num"]: row["From Bus Latitude"] for _, row in df_line.iterrows()
+}
+line_fromBusLongitude_dict = {
+    row["line_num"]: row["From Bus Longitude"] for _, row in df_line.iterrows()
+}
+line_toBusLatitude_dict = {
+    row["line_num"]: row["To Bus Latitude"] for _, row in df_line.iterrows()
+}
+line_toBusLongitude_dict = {
+    row["line_num"]: row["To Bus Longitude"] for _, row in df_line.iterrows()
+}
+line_length_dict = {
+    row["line_num"]: row["Length (Mile)"] for _, row in df_line.iterrows()
+}
+
+model.line_fromBusNumber = Param(model.L, initialize=line_fromBusNumber_dict)
+model.line_toBusNumber = Param(model.L, initialize=line_toBusNumber_dict)
+model.line_r = Param(model.L, initialize=line_r_dict)
+model.line_x = Param(model.L, initialize=line_x_dict)
+model.line_b = Param(model.L, initialize=line_b_dict)
+model.line_capactiy = Param(model.L, initialize=line_capactiy_dict)
+model.line_fromBusLatitude = Param(model.L, initialize=line_fromBusLatitude_dict)
+model.line_fromBusLongitude = Param(model.L, initialize=line_fromBusLongitude_dict)
+model.line_toBusLatitude = Param(model.L, initialize=line_toBusLatitude_dict)
+model.line_toBusLongitude = Param(model.L, initialize=line_toBusLongitude_dict)
+model.line_length = Param(model.L, initialize=line_length_dict)
+
+
+# --- Verification Prints to check inputs ---
 print("Bus set N:", list(model.N.data()))
 for n in list(model.N.data())[: len(model.N)]:
 
     print(
         f"Bus {n}:",
+        "| Bus name:",
         model.bus_name[n],
         "| Lat:",
         model.bus_latitude[n],
@@ -118,6 +161,7 @@ print("\nGenerator set G:", list(model.G.data()))
 for g in list(model.G.data())[: len(model.G)]:
     print(
         f"Generator {g}:",
+        "| To bus number:",
         model.gen_toBusNumber[g],
         "| Pmax:",
         model.gen_pMax[g],
@@ -139,6 +183,33 @@ for g in list(model.G.data())[: len(model.G)]:
         model.gen_rampingRate[g],
     )
 
+print("\nLine set L:", list(model.L.data()))
+for l in list(model.L.data())[: len(model.L)]:
+    print(
+        f"Line {l}:",
+        "| From Bus:",
+        model.line_fromBusNumber[l],
+        "| To Bus:",
+        model.line_toBusNumber[l],
+        "| R:",
+        model.line_r[l],
+        "| X:",
+        model.line_x[l],
+        "| B:",
+        model.line_b[l],
+        "| Capacity:",
+        model.line_capactiy[l],
+        "| From Lat:",
+        model.line_fromBusLatitude[l],
+        "| From Long:",
+        model.line_fromBusLongitude[l],
+        "| To Lat:",
+        model.line_toBusLatitude[l],
+        "| To Long:",
+        model.line_toBusLongitude[l],
+        "| Length:",
+        model.line_length[l],
+    )
 # --- Variables ---
 # Example variable: x[n,d,h]
 # model.x = Var(model.N, model.D, model.H, domain=NonNegativeReals)
