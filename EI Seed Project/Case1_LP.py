@@ -7,6 +7,7 @@ df_bus = pd.read_csv("EI Seed Project/TEXAS 123-BT params (bus).csv")
 df_gen = pd.read_csv("EI Seed Project/TEXAS 123-BT params (generation).csv")
 df_line = pd.read_csv("EI Seed Project/TEXAS 123-BT params (line).csv")
 
+
 # --- Model ---
 model = ConcreteModel()
 
@@ -15,7 +16,7 @@ model = ConcreteModel()
 time_yearsHorizon = 10  # Number of years in the planning horizon
 time_daysHorizon = 365  # Number of days in the planning horizon
 time_hoursHorizon = 24  # Number of hours in a day
-
+BaseMVA = 100  # Base power in MVA, used for per unit calculations
 
 model.N = Set(initialize=df_bus["Bus Number"].unique())  # Set of buses
 model.G = Set(
@@ -29,18 +30,22 @@ model.I_gen = Set(
 )  # Set of generator technologies
 model.I_gen_TH = Set(
     initialize=df_gen[
-        df_gen["Fuel type"].isin(["Natura Gas", "Coal", "Nuclear", "Hydro"])
+        df_gen["Fuel type"].isin(["Natural Gas", "Coal", "Nuclear", "Hydro"])
     ]["Fuel type"].unique()
 )  # Set of thermal generator technologies
 # Hydro is included as a parameter from the reference, but should not be considered as investment variable.
 model.I_gen_RN = Set(
     initialize=df_gen[df_gen["Fuel type"].isin(["Wind", "Solar"])]["Fuel type"].unique()
 )  # Set of renewable generators
-model.C = Set(initialize=range(1, 6))  # Regional sets of data centers load zone (TBD)
+model.W = Set(initialize=df_bus["Weather Zone"].unique())  # Set of weather zones
+model.C = Set(
+    initialize=df_bus["Weather Zone"].unique()
+)  # Regional sets of data centers load zone (TBD)
 model.M = Set(
-    initialize=range(1, 6)
+    initialize=df_bus["Weather Zone"].unique()
 )  # Regional sets of chemical manufacturing load zone (TBD)
 
+model.pprint()
 # --- Parameters ---
 # ---- Read from TEXAS 123-BT params.csv files in the working direct. ----
 # ----- Bus Parameters ----
@@ -110,7 +115,7 @@ line_toBusNumber_dict = {
     row["line_num"]: row["To Bus Number"] for _, row in df_line.iterrows()
 }
 line_r_dict = {row["line_num"]: row["R, pu"] for _, row in df_line.iterrows()}
-line_x_dict = {row["line_num"]: row["X, pu"] for _, row in df_line.iterrows()}
+# line_x_dict = {row["line_num"]: row["X, pu"] for _, row in df_line.iterrows()}
 line_b_dict = {row["line_num"]: row["B, pu"] for _, row in df_line.iterrows()}
 line_capactiy_dict = {
     row["line_num"]: row["Capacity (MW)"] for _, row in df_line.iterrows()
@@ -131,10 +136,26 @@ line_length_dict = {
     row["line_num"]: row["Length (Mile)"] for _, row in df_line.iterrows()
 }
 
+line_x_dict = {
+    (row["From Bus Number"], row["To Bus Number"]): row["X, pu"]
+    for _, row in df_line.iterrows()
+}
+
+model.line_x = Param(model.N, model.N, initialize=line_x_dict, default=0)
+
+c_trans_dict = (
+    df_line.groupby(["From Bus Number", "To Bus Number"])["Capacity (MW)"]
+    .sum()
+    .to_dict()
+)
+
+model.c_trans = Param(model.N, model.N, initialize=c_trans_dict, default=0)
+
+
 model.line_fromBusNumber = Param(model.L, initialize=line_fromBusNumber_dict)
 model.line_toBusNumber = Param(model.L, initialize=line_toBusNumber_dict)
 model.line_r = Param(model.L, initialize=line_r_dict)
-model.line_x = Param(model.L, initialize=line_x_dict)
+# model.line_x = Param(model.L, initialize=line_x_dict)
 model.line_b = Param(model.L, initialize=line_b_dict)
 model.line_capactiy = Param(model.L, initialize=line_capactiy_dict)
 model.line_fromBusLatitude = Param(model.L, initialize=line_fromBusLatitude_dict)
@@ -144,79 +165,93 @@ model.line_toBusLongitude = Param(model.L, initialize=line_toBusLongitude_dict)
 model.line_length = Param(model.L, initialize=line_length_dict)
 
 
-# --- Verification Prints to check inputs ---
-print("Bus set N:", list(model.N.data()))
-for n in list(model.N.data())[: len(model.N)]:
+# Group by (Bus Number, Fuel type) and sum Pmax (MW)
+gen_c_gen_dict = (
+    df_gen.groupby(["Bus Number", "Fuel type"])["Pmax (MW)"].sum().to_dict()
+)
 
-    print(
-        f"Bus {n}:",
-        "| Bus name:",
-        model.bus_name[n],
-        "| Lat:",
-        model.bus_latitude[n],
-        "| Long:",
-        model.bus_longitude[n],
-        "| Gen bus:",
-        model.bus_genBool[n],
-        "| Voltage:",
-        model.bus_nominalVoltage[n],
-        "| Weather zone:",
-        model.bus_weatherZone[n],
-    )
+# Define the parameter in Pyomo, default=0 for non-existent pairs
+model.c_gen = Param(model.N, model.I_gen, initialize=gen_c_gen_dict, default=0)
 
-print("\nGenerator set G:", list(model.G.data()))
-for g in list(model.G.data())[: len(model.G)]:
-    print(
-        f"Generator {g}:",
-        "| To bus number:",
-        model.gen_toBusNumber[g],
-        "| Pmax:",
-        model.gen_pMax[g],
-        "| Pmin:",
-        model.gen_pMin[g],
-        "| Qmax:",
-        model.gen_qMax[g],
-        "| Qmin:",
-        model.gen_qMin[g],
-        "| Fuel type:",
-        model.gen_fuelType[g],
-        "| C0:",
-        model.gen_c0[g],
-        "| C1:",
-        model.gen_c1[g],
-        "| Csu:",
-        model.gen_cSu[g],
-        "| Ramping rate:",
-        model.gen_rampingRate[g],
-    )
+# for n in model.N:
+#     for i in model.I_gen:
+#         val = value(model.c_gen[n, i])
+#         if val != 0:
+#             print(f"c_gen[{n}, {i}] = {val}")
 
-print("\nLine set L:", list(model.L.data()))
-for l in list(model.L.data())[: len(model.L)]:
-    print(
-        f"Line {l}:",
-        "| From Bus:",
-        model.line_fromBusNumber[l],
-        "| To Bus:",
-        model.line_toBusNumber[l],
-        "| R:",
-        model.line_r[l],
-        "| X:",
-        model.line_x[l],
-        "| B:",
-        model.line_b[l],
-        "| Capacity:",
-        model.line_capactiy[l],
-        "| From Lat:",
-        model.line_fromBusLatitude[l],
-        "| From Long:",
-        model.line_fromBusLongitude[l],
-        "| To Lat:",
-        model.line_toBusLatitude[l],
-        "| To Long:",
-        model.line_toBusLongitude[l],
-        "| Length:",
-        model.line_length[l],
-    )
+# # --- Verification Prints to check inputs ---
+# print("Bus set N:", list(model.N.data()))
+# for n in list(model.N.data())[: len(model.N)]:
+
+#     print(
+#         f"Bus {n}:",
+#         "| Bus name:",
+#         model.bus_name[n],
+#         "| Lat:",
+#         model.bus_latitude[n],
+#         "| Long:",
+#         model.bus_longitude[n],
+#         "| Gen bus:",
+#         model.bus_genBool[n],
+#         "| Voltage:",
+#         model.bus_nominalVoltage[n],
+#         "| Weather zone:",
+#         model.bus_weatherZone[n],
+#     )
+
+# print("\nGenerator set G:", list(model.G.data()))
+# for g in list(model.G.data())[: len(model.G)]:
+#     print(
+#         f"Generator {g}:",
+#         "| To bus number:",
+#         model.gen_toBusNumber[g],
+#         "| Pmax:",
+#         model.gen_pMax[g],
+#         "| Pmin:",
+#         model.gen_pMin[g],
+#         "| Qmax:",
+#         model.gen_qMax[g],
+#         "| Qmin:",
+#         model.gen_qMin[g],
+#         "| Fuel type:",
+#         model.gen_fuelType[g],
+#         "| C0:",
+#         model.gen_c0[g],
+#         "| C1:",
+#         model.gen_c1[g],
+#         "| Csu:",
+#         model.gen_cSu[g],
+#         "| Ramping rate:",
+#         model.gen_rampingRate[g],
+#     )
+
+# print("\nLine set L:", list(model.L.data()))
+# for l in list(model.L.data())[: len(model.L)]:
+#     print(
+#         f"Line {l}:",
+#         "| From Bus:",
+#         model.line_fromBusNumber[l],
+#         "| To Bus:",
+#         model.line_toBusNumber[l],
+#         "| R:",
+#         model.line_r[l],
+#         "| X:",
+#         model.line_x[l],
+#         "| B:",
+#         model.line_b[l],
+#         "| Capacity:",
+#         model.line_capactiy[l],
+#         "| From Lat:",
+#         model.line_fromBusLatitude[l],
+#         "| From Long:",
+#         model.line_fromBusLongitude[l],
+#         "| To Lat:",
+#         model.line_toBusLatitude[l],
+#         "| To Long:",
+#         model.line_toBusLongitude[l],
+#         "| Length:",
+#         model.line_length[l],
+#     )
 
 # --- Variables ---
 # Example variable: x[n,d,h]
@@ -267,13 +302,16 @@ def const_oper_energyBalance_rule(m, n, d, h):
 def const_oper_loadBalanceOfDataCenter_rule(m, c, d, h):
     return sum(m.p_dataCenter[n, d, h] for n in m.N_c[c]) == m.D_dataCenter[c, d, h]
 
+
 def const_oper_loadBalanceOfChemManu_rule(m, m_idx, d, h):
     return (
         sum(m.p_chemManu[n, d, h] for n in m.N_m[m_idx]) == m.D_chemManu[m_idx, d, h]
     )  # Not to confuse m_index as a set of M with model m
 
+
 def const_oper_genCapacity_rule(m, n, i, d, h):
     return m.p_gen[n, i, d, h] <= m.c_gen0[n, i] + m.c_gen[n, i]
+
 
 def const_oper_genRampingUp_rule(m, n, i, d, h):
     if (d == 1) and (h == 1):
@@ -283,6 +321,7 @@ def const_oper_genRampingUp_rule(m, n, i, d, h):
     else:
         return m.p_gen[n, i, d, h] - m.p_gen[n, i, d, h - 1] <= m.R_ramp[i]
 
+
 def const_oper_genRampingDown_rule(m, n, i, d, h):
     if (d == 1) and (h == 1):
         return Constraint.Skip
@@ -290,6 +329,7 @@ def const_oper_genRampingDown_rule(m, n, i, d, h):
         return m.p_gen[n, i, d, h] - m.p_gen[n, i, d - 1, m.H.last()] >= -m.R_ramp[i]
     else:
         return m.p_gen[n, i, d, h] - m.p_gen[n, i, d, h - 1] >= -m.R_ramp[i]
+
 
 # transimission
 def const_oper_transCapacityUpper_rule(m, n, n_prime, d, h):
@@ -300,13 +340,14 @@ def const_oper_transCapacityUpper_rule(m, n, n_prime, d, h):
         <= m.c_trans0[n, n_prime] + m.c_trans[n, n_prime]
     )
 
+
 def const_oper_transCapacityLower_rule(m, n, n_prime, d, h):
     if n >= n_prime:
         return Constraint.Skip
-    return (
-        m.B[n, n_prime] * (m.theta[n, d, h] - m.theta[n_prime, d, h])
-        >= - (m.c_trans0[n, n_prime] + m.c_trans[n, n_prime])
+    return m.B[n, n_prime] * (m.theta[n, d, h] - m.theta[n_prime, d, h]) >= -(
+        m.c_trans0[n, n_prime] + m.c_trans[n, n_prime]
     )
+
 
 # storage
 def const_stor_storageLevel_rule(m, n, d, h):
@@ -325,24 +366,35 @@ def const_stor_storageLevel_rule(m, n, d, h):
             + m.eta_discharge * m.p_discharge[n, d, h]
         )
 
+
 def const_stor_storageLevelRollOver_rule(m, n, d):
     if d == 1:
         return Constraint.Skip
     else:
         return m.p_level[n, d, 1] == m.p_level[n, d - 1, m.H.last()]
 
+
 def const_stor_storageCapacity_rule(m, n, d, h):
     return m.p_level[n, d, h] <= m.c_stor0[n] + m.c_stor[n]
 
-#investment
+
+# investment
 def const_invest_genCapacity_rule(m, n, i):
-    return m.c_gen[n, i] <= m.c_gen_max[n, i]  # Maximum capacity for each generator type at each bus
+    return (
+        m.c_gen[n, i] <= m.c_gen_max[n, i]
+    )  # Maximum capacity for each generator type at each bus
+
 
 def const_invest_transCapacity_rule(m, n, n_prime):
-    return m.c_trans[n, n_prime] <= m.c_trans_max[n, n_prime]  # Maximum capacity for each transmission line between buses
+    return (
+        m.c_trans[n, n_prime] <= m.c_trans_max[n, n_prime]
+    )  # Maximum capacity for each transmission line between buses
+
 
 def const_invest_storCapacity_rule(m, n):
-    return m.c_stor[n] <= m.c_stor_max[n]  # Maximum capacity for each storage at each bus
+    return (
+        m.c_stor[n] <= m.c_stor_max[n]
+    )  # Maximum capacity for each storage at each bus
 
 
 model.const_oper_energyBalance = Constraint(
@@ -380,6 +432,7 @@ model.const_oper_transCapacity_lower = Constraint(
 )
 
 # model.pprint # for checking the infos.
+
 
 # --- Objective ---
 def obj_rule(m):
