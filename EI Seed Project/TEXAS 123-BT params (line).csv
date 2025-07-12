@@ -1,4 +1,4 @@
-﻿line_num,From Bus Number,To Bus Number,"R, pu","X, pu","B, pu",Capacity (MW),From Bus Latitude,From Bus Longitude,To Bus Latitude,To Bus Longitude,Length (Mile)
+﻿line_num,From Bus Number,To Bus Number,"R, pu","X, pu","B, pu",Capacity (MW),From Bus Latitude,To Bus Latitude,From Bus Longitude,To Bus Longitude,Length (Mile)
 1,98,1,0.00261,0.02511,0.50862,1207.06625,31.613,31.852,-95.062,-95.888,60.3508797
 2,78,1,0.00126,0.01311,0.22609,1207.06625,31.655,31.852,-96.468,-95.888,43.2011986
 3,81,1,0.00119,0.01254,0.21113,1207.06625,32.304,31.852,-95.391,-95.888,50.4316635

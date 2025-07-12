@@ -45,7 +45,6 @@ model.M = Set(
     initialize=df_bus["Weather Zone"].unique()
 )  # Regional sets of chemical manufacturing load zone (TBD)
 
-model.pprint()
 # --- Parameters ---
 # ---- Read from TEXAS 123-BT params.csv files in the working direct. ----
 # ----- Bus Parameters ----
