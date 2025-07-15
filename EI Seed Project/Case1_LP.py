@@ -82,6 +82,12 @@ bus_nominalVoltage_dict = {
 bus_weatherZone_dict = {
     row["Bus Number"]: row["Weather Zone"] for _, row in df_bus.iterrows()
 }
+bus_dataCenterZone_dict = {
+    row["Bus Number"]: row["Weather Zone"] for _, row in df_bus.iterrows()
+}  # SHOULD BE MODIFIED LATER
+bus_chemicalManuZone_dict = {
+    row["Bus Number"]: row["Weather Zone"] for _, row in df_bus.iterrows()
+}  # SHOULD BE MODIFIED LATER
 
 model.bus_name = Param(model.N, initialize=bus_name_dict, within=Any)
 model.bus_latitude = Param(model.N, initialize=bus_latitude_dict)
@@ -91,6 +97,11 @@ model.bus_nominalVoltage = Param(model.N, initialize=bus_nominalVoltage_dict)
 model.bus_weatherZone = Param(
     model.N, initialize=bus_weatherZone_dict, within=Any
 )  # within=Any: this allows for any type of data, including strings or integers. default is Real, which is a floating-point number.
+model.dataCenterZone = Param(model.N, initialize=bus_dataCenterZone_dict, within=Any)
+model.chemicalManuZone = Param(
+    model.N, initialize=bus_chemicalManuZone_dict, within=Any
+)
+
 
 # ----- Generator Parameters ----
 # Generator initial capacity based on the bus number and fuel type
@@ -168,6 +179,10 @@ model.line_mile = Param(model.L, initialize=line_mile_dict)
 # ----- Load Parameters ----
 # Load parameters for data centers and chemical manufacturing
 model.D_res = Param(model.N, model.D, model.H, initialize=0)
+model.D_dataCenter = Param(model.C, model.D, model.H, initialize=0)
+model.D_chemManu = Param(
+    model.M, model.D, model.H, initialize=0
+)  # Chemical manufacturing load
 
 # ----------------------------------------------------
 # Variables
@@ -239,141 +254,153 @@ def const_oper_energyBalance_rule(m, n, d, h):
 model.const_oper_energyBalance = Constraint(
     model.N, model.D, model.H, rule=const_oper_energyBalance_rule
 )
-print(model.const_oper_energyBalance[100, 1, 1].expr)
-
-# def const_oper_loadBalanceOfDataCenter_rule(m, c, d, h):
-#     return sum(m.p_dataCenter[n, d, h] for n in m.N_c[c]) == m.D_dataCenter[c, d, h]
+# print(model.const_oper_energyBalance[100, 1, 1].expr)
 
 
-# def const_oper_loadBalanceOfChemManu_rule(m, m_idx, d, h):
-#     return (
-#         sum(m.p_chemManu[n, d, h] for n in m.N_m[m_idx]) == m.D_chemManu[m_idx, d, h]
-#     )  # Not to confuse m_index as a set of M with model m
+def const_oper_loadBalanceOfDataCenter_rule(m, c, d, h):
+    return (
+        sum(m.p_dataCenter[n, d, h] for n in m.N if m.dataCenterZone[n] == c)
+        == m.D_dataCenter[c, d, h]
+    )
 
 
-# def const_oper_genCapacity_rule(m, n, i, d, h):
-#     return m.p_gen[n, i, d, h] <= m.c_gen0[n, i] + m.c_gen[n, i]
+model.const_oper_loadBalanceOfDataCenter = Constraint(
+    model.C, model.D, model.H, rule=const_oper_loadBalanceOfDataCenter_rule
+)
+
+print(model.const_oper_loadBalanceOfDataCenter["WEST", 1, 1].expr)
+# print(model.const_oper_energyBalance[100, 1, 1].expr)
 
 
-# def const_oper_genRampingUp_rule(m, n, i, d, h):
-#     if (d == 1) and (h == 1):
-#         return Constraint.Skip
-#     elif h == 1:
-#         return m.p_gen[n, i, d, h] - m.p_gen[n, i, d - 1, m.H.last()] <= m.R_ramp[i]
-#     else:
-#         return m.p_gen[n, i, d, h] - m.p_gen[n, i, d, h - 1] <= m.R_ramp[i]
+def const_oper_loadBalanceOfChemManu_rule(m, m_idx, d, h):
+    return (
+        sum(m.p_chemManu[n, d, h] for n in m.N_m[m_idx]) == m.D_chemManu[m_idx, d, h]
+    )  # Not to confuse m_index as a set of M with model m
 
 
-# def const_oper_genRampingDown_rule(m, n, i, d, h):
-#     if (d == 1) and (h == 1):
-#         return Constraint.Skip
-#     elif h == 1:
-#         return m.p_gen[n, i, d, h] - m.p_gen[n, i, d - 1, m.H.last()] >= -m.R_ramp[i]
-#     else:
-#         return m.p_gen[n, i, d, h] - m.p_gen[n, i, d, h - 1] >= -m.R_ramp[i]
+def const_oper_genCapacity_rule(m, n, i, d, h):
+    return m.p_gen[n, i, d, h] <= m.c_gen0[n, i] + m.c_gen[n, i]
 
 
-# # transimission
-# def const_oper_transCapacityUpper_rule(m, n, n_prime, d, h):
-#     if n >= n_prime:
-#         return Constraint.Skip
-#     return (
-#         m.B[n, n_prime] * (m.theta[n, d, h] - m.theta[n_prime, d, h])
-#         <= m.c_trans0[n, n_prime] + m.c_trans[n, n_prime]
-#     )
+def const_oper_genRampingUp_rule(m, n, i, d, h):
+    if (d == 1) and (h == 1):
+        return Constraint.Skip
+    elif h == 1:
+        return m.p_gen[n, i, d, h] - m.p_gen[n, i, d - 1, m.H.last()] <= m.R_ramp[i]
+    else:
+        return m.p_gen[n, i, d, h] - m.p_gen[n, i, d, h - 1] <= m.R_ramp[i]
 
 
-# def const_oper_transCapacityLower_rule(m, n, n_prime, d, h):
-#     if n >= n_prime:
-#         return Constraint.Skip
-#     return m.B[n, n_prime] * (m.theta[n, d, h] - m.theta[n_prime, d, h]) >= -(
-#         m.c_trans0[n, n_prime] + m.c_trans[n, n_prime]
-#     )
+def const_oper_genRampingDown_rule(m, n, i, d, h):
+    if (d == 1) and (h == 1):
+        return Constraint.Skip
+    elif h == 1:
+        return m.p_gen[n, i, d, h] - m.p_gen[n, i, d - 1, m.H.last()] >= -m.R_ramp[i]
+    else:
+        return m.p_gen[n, i, d, h] - m.p_gen[n, i, d, h - 1] >= -m.R_ramp[i]
 
 
-# # storage
-# def const_stor_storageLevel_rule(m, n, d, h):
-#     if (d == 1) and (h == 1):  # initial level should be designated
-#         return (
-#             m.p_level[n, d, h]
-#             == m.p_level0[n, d]
-#             + m.eta_charge * m.p_charge[n, d, h]
-#             + m.eta_discharge * m.p_discharge[n, d, h]
-#         )
-#     else:
-#         return (
-#             m.p_level[n, d, h]
-#             == m.p_level[n, d, h - 1]
-#             + m.eta_charge * m.p_charge[n, d, h]
-#             + m.eta_discharge * m.p_discharge[n, d, h]
-#         )
+# transimission
+def const_oper_transCapacityUpper_rule(m, n, n_prime, d, h):
+    if n >= n_prime:
+        return Constraint.Skip
+    return (
+        m.B[n, n_prime] * (m.theta[n, d, h] - m.theta[n_prime, d, h])
+        <= m.c_trans0[n, n_prime] + m.c_trans[n, n_prime]
+    )
 
 
-# def const_stor_storageLevelRollOver_rule(m, n, d):
-#     if d == 1:
-#         return Constraint.Skip
-#     else:
-#         return m.p_level[n, d, 1] == m.p_level[n, d - 1, m.H.last()]
+def const_oper_transCapacityLower_rule(m, n, n_prime, d, h):
+    if n >= n_prime:
+        return Constraint.Skip
+    return m.B[n, n_prime] * (m.theta[n, d, h] - m.theta[n_prime, d, h]) >= -(
+        m.c_trans0[n, n_prime] + m.c_trans[n, n_prime]
+    )
 
 
-# def const_stor_storageCapacity_rule(m, n, d, h):
-#     return m.p_level[n, d, h] <= m.c_stor0[n] + m.c_stor[n]
+# storage
+def const_stor_storageLevel_rule(m, n, d, h):
+    if (d == 1) and (h == 1):  # initial level should be designated
+        return (
+            m.p_level[n, d, h]
+            == m.p_level0[n, d]
+            + m.eta_charge * m.p_charge[n, d, h]
+            + m.eta_discharge * m.p_discharge[n, d, h]
+        )
+    else:
+        return (
+            m.p_level[n, d, h]
+            == m.p_level[n, d, h - 1]
+            + m.eta_charge * m.p_charge[n, d, h]
+            + m.eta_discharge * m.p_discharge[n, d, h]
+        )
 
 
-# # investment
-# def const_invest_genCapacity_rule(m, n, i):
-#     return (
-#         m.c_gen[n, i] <= m.c_gen_max[n, i]
-#     )  # Maximum capacity for each generator type at each bus
+def const_stor_storageLevelRollOver_rule(m, n, d):
+    if d == 1:
+        return Constraint.Skip
+    else:
+        return m.p_level[n, d, 1] == m.p_level[n, d - 1, m.H.last()]
 
 
-# def const_invest_transCapacity_rule(m, n, n_prime):
-#     return (
-#         m.c_trans[n, n_prime] <= m.c_trans_max[n, n_prime]
-#     )  # Maximum capacity for each transmission line between buses
+def const_stor_storageCapacity_rule(m, n, d, h):
+    return m.p_level[n, d, h] <= m.c_stor0[n] + m.c_stor[n]
 
 
-# def const_invest_storCapacity_rule(m, n):
-#     return (
-#         m.c_stor[n] <= m.c_stor_max[n]
-#     )  # Maximum capacity for each storage at each bus
+# investment
+def const_invest_genCapacity_rule(m, n, i):
+    return (
+        m.c_gen[n, i] <= m.c_gen_max[n, i]
+    )  # Maximum capacity for each generator type at each bus
 
 
-# model.const_oper_energyBalance = Constraint(
-#     model.N, model.D, model.H, rule=const_oper_energyBalance_rule
-# )
-# model.const_oper_loadBalanceOfDataCenter = Constraint(
-#     model.C, model.D, model.H, rule=const_oper_loadBalanceOfDataCenter_rule
-# )
-# model.const_oper_loadBalanceOfChemManu = Constraint(
-#     model.M, model.D, model.H, rule=const_oper_loadBalanceOfChemManu_rule
-# )
-# model.const_oper_genCapacity = Constraint(
-#     model.N, model.I_gen, model.D, model.H, rule=const_oper_genCapacity_rule
-# )
-# model.const_oper_genRampingUp = Constraint(
-#     model.N, model.I_gen_TH, model.D, model.H, rule=const_oper_genRampingUp_rule
-# )
-# model.const_oper_genRampingDown = Constraint(
-#     model.N, model.I_gen_TH, model.D, model.H, rule=const_oper_genRampingDown_rule
-# )
-# model.const_oper_storageLevel = Constraint(
-#     model.N, model.D, model.H, rule=const_stor_storageLevel_rule
-# )
-# model.const_oper_storageLevelRollOver = Constraint(
-#     model.N, model.D, rule=const_stor_storageLevelRollOver_rule
-# )
-# model.const_oper_storageCapacity = Constraint(
-#     model.N, model.D, model.H, rule=const_stor_storageCapacity_rule
-# )
-# model.const_oper_transCapacity_upper = Constraint(
-#     model.N, model.N, model.D, model.H, rule=const_oper_transCapacityUpper_rule
-# )
-# model.const_oper_transCapacity_lower = Constraint(
-#     model.N, model.N, model.D, model.H, rule=const_oper_transCapacityLower_rule
-# )
+def const_invest_transCapacity_rule(m, n, n_prime):
+    return (
+        m.c_trans[n, n_prime] <= m.c_trans_max[n, n_prime]
+    )  # Maximum capacity for each transmission line between buses
 
-# # model.pprint # for checking the infos.
+
+def const_invest_storCapacity_rule(m, n):
+    return (
+        m.c_stor[n] <= m.c_stor_max[n]
+    )  # Maximum capacity for each storage at each bus
+
+
+model.const_oper_energyBalance = Constraint(
+    model.N, model.D, model.H, rule=const_oper_energyBalance_rule
+)
+model.const_oper_loadBalanceOfDataCenter = Constraint(
+    model.C, model.D, model.H, rule=const_oper_loadBalanceOfDataCenter_rule
+)
+model.const_oper_loadBalanceOfChemManu = Constraint(
+    model.M, model.D, model.H, rule=const_oper_loadBalanceOfChemManu_rule
+)
+model.const_oper_genCapacity = Constraint(
+    model.N, model.I_gen, model.D, model.H, rule=const_oper_genCapacity_rule
+)
+model.const_oper_genRampingUp = Constraint(
+    model.N, model.I_gen_TH, model.D, model.H, rule=const_oper_genRampingUp_rule
+)
+model.const_oper_genRampingDown = Constraint(
+    model.N, model.I_gen_TH, model.D, model.H, rule=const_oper_genRampingDown_rule
+)
+model.const_oper_storageLevel = Constraint(
+    model.N, model.D, model.H, rule=const_stor_storageLevel_rule
+)
+model.const_oper_storageLevelRollOver = Constraint(
+    model.N, model.D, rule=const_stor_storageLevelRollOver_rule
+)
+model.const_oper_storageCapacity = Constraint(
+    model.N, model.D, model.H, rule=const_stor_storageCapacity_rule
+)
+model.const_oper_transCapacity_upper = Constraint(
+    model.N, model.N, model.D, model.H, rule=const_oper_transCapacityUpper_rule
+)
+model.const_oper_transCapacity_lower = Constraint(
+    model.N, model.N, model.D, model.H, rule=const_oper_transCapacityLower_rule
+)
+
+# model.pprint # for checking the infos.
 
 
 # ----------------------------------------------------
