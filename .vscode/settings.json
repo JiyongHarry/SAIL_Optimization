@@ -1,5 +1,5 @@
 {
         "python.formatting.provider": "black",
-        "editor.formatOnSave": true
-
+        "editor.formatOnSave": true,
+        "julia.executablePath": "C:\\Users\\jl85764\\AppData\\Local\\Programs\\Julia-1.11.6\\bin\\julia.exe"
 }
